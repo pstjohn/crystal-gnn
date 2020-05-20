@@ -76,7 +76,7 @@ atom_mean = layers.Embedding(preprocessor.site_classes, 1,
 rbf_distance = RBFExpansion(dimension=embed_dimension,
                             init_max_distance=7,
                             init_gap=30,
-                            trainable=True)(distances)
+                            trainable=False)(distances)
 bond_state = layers.Dense(embed_dimension)(rbf_distance)
 
 def message_block(original_atom_state, original_bond_state, connectivity, i):
@@ -113,6 +113,7 @@ def message_block(original_atom_state, original_bond_state, connectivity, i):
 for i in range(num_messages):
     atom_state, bond_state = message_block(atom_state, bond_state, connectivity, i)
 
+atom_state = layers.Dropout(0.25)(atom_state)
 atom_state = layers.Dense(1)(atom_state)
 atom_state = layers.Add()([atom_state, atom_mean])
 
@@ -143,5 +144,5 @@ model.fit(train_dataset,
           epochs=500,
           steps_per_epoch=STEPS_PER_EPOCH,
           validation_steps=math.ceil(500/batch_size),
-#          callbacks=[checkpoint, csv_logger],
+          callbacks=[checkpoint, csv_logger],
           verbose=1)
