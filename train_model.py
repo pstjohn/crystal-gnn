@@ -9,8 +9,10 @@ from tensorflow.keras import layers
 import nfp
 from nfp_extensions import RBFExpansion
 
-with open('tfrecords/preprocessor.p', 'rb') as f:
-    preprocessor = pickle.load(f)
+# Initialize the preprocessor class.
+from nfp_extensions import CifPreprocessor
+preprocessor = CifPreprocessor(num_neighbors=12)
+preprocessor.from_json('tfrecords/preprocessor.json')
 
 # Build the tf.data input pipeline
 def parse_example(example):

@@ -7,6 +7,7 @@
 #SBATCH --output=/scratch/pstjohn/gpu.%j.out
 
 source ~/.bashrc
-conda activate /projects/rlmolecule/pstjohn/envs/tf2_10
+module load cudnn/7.4.2/cuda-10.0
+conda activate /projects/rlmolecule/pstjohn/envs/tf2_pymatgen
 
 srun python train_model.py

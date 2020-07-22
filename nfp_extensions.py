@@ -2,10 +2,10 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
 
-from nfp.preprocessing import zero
+from nfp.preprocessing import zero, SmilesPreprocessor
 from nfp.preprocessing.features import Tokenizer
 
-class CifPreprocessor(object):
+class CifPreprocessor(SmilesPreprocessor):
     def __init__(self, radius=None, num_neighbors=12):
         self.site_tokenizer = Tokenizer()
         self.radius = radius

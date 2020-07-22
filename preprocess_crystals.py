@@ -19,8 +19,12 @@ if __name__ == '__main__':
         
     # Read energy data
     data = pd.read_csv('/projects/rlmolecule/pgorai/nrelmatdb_icsd.csv')
-    data = data.sort_values('energyperatom').drop_duplicates(subset='icsdnum', keep='first').sample(frac=1., random_state=1)
+    data2 = pd.read_csv('/projects/rlmolecule/pgorai/nrelmatdb_icsd2.csv')
+    data = data.append(data2)
 
+    data = data.sort_values('energyperatom').drop_duplicates(
+        subset='icsdnum', keep='first').sample(frac=1., random_state=1)
+    
     # So pymatgen doesn't want to take the ISO-8859-1 cifs in the tarball, I have to 
     # re-encode as utf-8 using the following command:
     # for file in *; do iconv -f ISO-8859-1 -t UTF-8 < $file > "../utf8_cifs/$file"; done
@@ -80,29 +84,29 @@ if __name__ == '__main__':
         lambda: inputs_generator(data[data.icsdnum.isin(train)], train=True),
         output_types=tf.string, output_shapes=())
 
-    filename = 'tfrecords/train.tfrecord.gz'
+    filename = 'tfrecords2/train.tfrecord.gz'
     writer = tf.data.experimental.TFRecordWriter(filename, compression_type='GZIP')
     writer.write(serialized_train_dataset)
     
-    with open('tfrecords/preprocessor.p', 'wb') as f:
-        pickle.dump(preprocessor, f)    
+    # Save the preprocessor data
+    preprocessor.to_json('tfrecords2/preprocessor.json')
 
     # Process the validation data
     serialized_valid_dataset = tf.data.Dataset.from_generator(
         lambda: inputs_generator(data[data.icsdnum.isin(valid)], train=False),
         output_types=tf.string, output_shapes=())
 
-    filename = 'tfrecords/valid.tfrecord.gz'
+    filename = 'tfrecords2/valid.tfrecord.gz'
     writer = tf.data.experimental.TFRecordWriter(filename, compression_type='GZIP')
     writer.write(serialized_valid_dataset)
     
     # Save train, valid, and test datasets
     data[data.icsdnum.isin(train)][
         ['icsdnum', 'numatom', 'initialspacegroupnum', 'energyperatom']].to_csv(
-        'train.csv.gz', compression='gzip', index=False)
+        'tfrecords2/train.csv.gz', compression='gzip', index=False)
     data[data.icsdnum.isin(valid)][
         ['icsdnum', 'numatom', 'initialspacegroupnum', 'energyperatom']].to_csv(
-        'valid.csv.gz', compression='gzip', index=False)
+        'tfrecords2/valid.csv.gz', compression='gzip', index=False)
     data[data.icsdnum.isin(test)][
         ['icsdnum', 'numatom', 'initialspacegroupnum', 'energyperatom']].to_csv(
-        'test.csv.gz', compression='gzip', index=False)
+        'tfrecords2/test.csv.gz', compression='gzip', index=False)
