@@ -8,6 +8,6 @@
 
 source ~/.bashrc
 module load cudnn/7.4.2/cuda-10.0
-conda activate /projects/rlmolecule/pstjohn/envs/tf2_pymatgen
+conda activate /projects/rlmolecule/pstjohn/envs/tf2_gpu
 
-srun python train_model.py
+srun python train_model_mp.py

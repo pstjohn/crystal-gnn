@@ -12,7 +12,7 @@ from nfp_extensions import RBFExpansion
 # Initialize the preprocessor class.
 from nfp_extensions import CifPreprocessor
 preprocessor = CifPreprocessor(num_neighbors=12)
-preprocessor.from_json('tfrecords/preprocessor.json')
+preprocessor.from_json('tfrecords2/preprocessor.json')
 
 # Build the tf.data input pipeline
 def parse_example(example):
@@ -38,7 +38,7 @@ max_bonds = 2048
 padded_shapes = (preprocessor.padded_shapes(max_sites=max_sites, max_bonds=max_bonds), [])
 padding_values = (preprocessor.padding_values, tf.constant(np.nan, dtype=tf.float32))
 
-train_dataset = tf.data.TFRecordDataset('tfrecords/train.tfrecord.gz', compression_type='GZIP')\
+train_dataset = tf.data.TFRecordDataset('tfrecords2/train.tfrecord.gz', compression_type='GZIP')\
     .map(parse_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)\
     .cache()\
     .shuffle(buffer_size=10000)\
@@ -48,7 +48,7 @@ train_dataset = tf.data.TFRecordDataset('tfrecords/train.tfrecord.gz', compressi
                   padding_values=padding_values)\
     .prefetch(tf.data.experimental.AUTOTUNE)
 
-valid_dataset = tf.data.TFRecordDataset('tfrecords/valid.tfrecord.gz', compression_type='GZIP')\
+valid_dataset = tf.data.TFRecordDataset('tfrecords2/valid.tfrecord.gz', compression_type='GZIP')\
     .map(parse_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)\
     .cache()\
     .shuffle(buffer_size=1000)\
@@ -75,10 +75,11 @@ atom_state = layers.Embedding(preprocessor.site_classes, embed_dimension,
 atom_mean = layers.Embedding(preprocessor.site_classes, 1,
                              name='site_mean', mask_zero=True)(site_class)
 
-rbf_distance = RBFExpansion(dimension=embed_dimension,
+rbf_distance = RBFExpansion(dimension=10,
                             init_max_distance=7,
                             init_gap=30,
-                            trainable=False)(distances)
+                            trainable=True)(distances)
+
 bond_state = layers.Dense(embed_dimension)(rbf_distance)
 
 def message_block(original_atom_state, original_bond_state, connectivity, i):
@@ -123,7 +124,7 @@ out = tf.keras.layers.GlobalAveragePooling1D()(atom_state)
 
 model = tf.keras.Model(input_tensors, [out])
 
-STEPS_PER_EPOCH = math.ceil(12609 / batch_size)  # number of training examples
+STEPS_PER_EPOCH = math.ceil(17238 / batch_size)  # number of training examples
 lr = 3E-4
 lr_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(lr,
   decay_steps=STEPS_PER_EPOCH*50,
@@ -132,7 +133,7 @@ lr_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(lr,
 
 model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr_schedule))
 
-model_name = 'trained_model'
+model_name = 'trained_model3'
 
 if not os.path.exists(model_name):
     os.makedirs(model_name)

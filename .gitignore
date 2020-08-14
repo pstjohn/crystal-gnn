@@ -113,4 +113,5 @@ Untitled*
 *.h5
 
 old_model/
-trained_model/
+trained_model*/
+tfrecords*/
