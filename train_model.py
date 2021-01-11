@@ -1,9 +1,11 @@
 import os
 import pickle
 import math
+import shutil
 
 import numpy as np
 import tensorflow as tf
+import tensorflow_addons as tfa
 from tensorflow.keras import layers
 
 import nfp
@@ -12,7 +14,7 @@ from nfp_extensions import RBFExpansion
 # Initialize the preprocessor class.
 from nfp_extensions import CifPreprocessor
 preprocessor = CifPreprocessor(num_neighbors=12)
-preprocessor.from_json('tfrecords2/preprocessor.json')
+preprocessor.from_json('tfrecords/preprocessor.json')
 
 # Build the tf.data input pipeline
 def parse_example(example):
@@ -32,13 +34,13 @@ def parse_example(example):
     return parsed, energyperatom
 
 # Here, we have to add the prediction target padding onto the input padding
-batch_size = 128
+batch_size = 64
 max_sites = 256
 max_bonds = 2048
 padded_shapes = (preprocessor.padded_shapes(max_sites=max_sites, max_bonds=max_bonds), [])
 padding_values = (preprocessor.padding_values, tf.constant(np.nan, dtype=tf.float32))
 
-train_dataset = tf.data.TFRecordDataset('tfrecords2/train.tfrecord.gz', compression_type='GZIP')\
+train_dataset = tf.data.TFRecordDataset('tfrecords/train.tfrecord.gz', compression_type='GZIP')\
     .map(parse_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)\
     .cache()\
     .shuffle(buffer_size=10000)\
@@ -48,7 +50,7 @@ train_dataset = tf.data.TFRecordDataset('tfrecords2/train.tfrecord.gz', compress
                   padding_values=padding_values)\
     .prefetch(tf.data.experimental.AUTOTUNE)
 
-valid_dataset = tf.data.TFRecordDataset('tfrecords2/valid.tfrecord.gz', compression_type='GZIP')\
+valid_dataset = tf.data.TFRecordDataset('tfrecords/valid.tfrecord.gz', compression_type='GZIP')\
     .map(parse_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)\
     .cache()\
     .shuffle(buffer_size=1000)\
@@ -66,8 +68,8 @@ connectivity = layers.Input(shape=[max_bonds, 2], dtype=tf.int64, name='connecti
 
 input_tensors = [site_class, distances, connectivity]
 
-embed_dimension = 128
-num_messages = 4
+embed_dimension = 256
+num_messages = 6
 
 atom_state = layers.Embedding(preprocessor.site_classes, embed_dimension,
                               name='site_embedding', mask_zero=True)(site_class)
@@ -116,7 +118,7 @@ def message_block(original_atom_state, original_bond_state, connectivity, i):
 for i in range(num_messages):
     atom_state, bond_state = message_block(atom_state, bond_state, connectivity, i)
 
-atom_state = layers.Dropout(0.25)(atom_state)
+#atom_state = layers.Dropout(0.25)(atom_state)
 atom_state = layers.Dense(1)(atom_state)
 atom_state = layers.Add()([atom_state, atom_mean])
 
@@ -124,19 +126,29 @@ out = tf.keras.layers.GlobalAveragePooling1D()(atom_state)
 
 model = tf.keras.Model(input_tensors, [out])
 
-STEPS_PER_EPOCH = math.ceil(17238 / batch_size)  # number of training examples
-lr = 3E-4
+STEPS_PER_EPOCH = math.ceil(16445 / batch_size)  # number of training examples
+lr = 1E-3
 lr_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(lr,
   decay_steps=STEPS_PER_EPOCH*50,
   decay_rate=1,
   staircase=False)
 
-model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr_schedule))
+wd_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(1E-5,
+  decay_steps=STEPS_PER_EPOCH*50,
+  decay_rate=1,
+  staircase=False)
 
-model_name = 'trained_model3'
+optimizer = tfa.optimizers.AdamW(learning_rate=lr_schedule, weight_decay=wd_schedule)
+
+model.compile(loss='mae', optimizer=optimizer)
+
+model_name = 'trained_model_b64_lr3'
 
 if not os.path.exists(model_name):
     os.makedirs(model_name)
+
+# Make a backup of the job submission script
+shutil.copy(__file__, model_name)
 
 filepath = model_name + "/best_model.hdf5"
 checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath, save_best_only=True, verbose=0)

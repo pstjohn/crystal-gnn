@@ -18,17 +18,17 @@ tqdm.pandas()
 if __name__ == '__main__':
         
     # Read energy data
-    data = pd.read_csv('/projects/rlmolecule/pgorai/nrelmatdb_icsd.csv')
-    data2 = pd.read_csv('/projects/rlmolecule/pgorai/nrelmatdb_icsd2.csv')
+    data = pd.read_csv('/projects/rlmolecule/shubham/cgcnn/nrelmatdb_dataset/clean_data/nrelmatdb1_updated.csv')
+    data2 = pd.read_csv('/projects/rlmolecule/shubham/cgcnn/nrelmatdb_dataset/clean_data/nrelmatdb2_updated.csv')
     data = data.append(data2)
 
     data = data.sort_values('energyperatom').drop_duplicates(
-        subset='icsdnum', keep='first').sample(frac=1., random_state=1)
+        subset='icsdnum', keep='first').sample(frac=1., random_state=5)
     
     # So pymatgen doesn't want to take the ISO-8859-1 cifs in the tarball, I have to 
     # re-encode as utf-8 using the following command:
     # for file in *; do iconv -f ISO-8859-1 -t UTF-8 < $file > "../utf8_cifs/$file"; done
-    cif_file = lambda x: '/scratch/pstjohn/utf8_cifs/icsd_{:06d}.cif'.format(x)
+    cif_file = lambda x: '/projects/rlmolecule/shubham/cgcnn/simple-cgcnn/cif_files/utf8_cifs/icsd_{:06d}.cif'.format(x)
     cif_exists = lambda x: os.path.exists(cif_file(x))
     data['cif_exists'] = data.icsdnum.apply(cif_exists)
     data = data[data.cif_exists]
@@ -57,8 +57,8 @@ if __name__ == '__main__':
 
 
     # Split the data into training and test sets
-    train, test = train_test_split(data.icsdnum.unique(), test_size=500, random_state=1)
-    train, valid = train_test_split(train, test_size=500, random_state=1)
+    train, test = train_test_split(data.icsdnum.unique(), test_size=500, random_state=5)
+    train, valid = train_test_split(train, test_size=500, random_state=5)
     
     
     # Initialize the preprocessor class.
@@ -84,29 +84,31 @@ if __name__ == '__main__':
         lambda: inputs_generator(data[data.icsdnum.isin(train)], train=True),
         output_types=tf.string, output_shapes=())
 
-    filename = 'tfrecords2/train.tfrecord.gz'
+    os.mkdir('tfrecords')
+
+    filename = 'tfrecords/train.tfrecord.gz'
     writer = tf.data.experimental.TFRecordWriter(filename, compression_type='GZIP')
     writer.write(serialized_train_dataset)
     
     # Save the preprocessor data
-    preprocessor.to_json('tfrecords2/preprocessor.json')
+    preprocessor.to_json('tfrecords/preprocessor.json')
 
     # Process the validation data
     serialized_valid_dataset = tf.data.Dataset.from_generator(
         lambda: inputs_generator(data[data.icsdnum.isin(valid)], train=False),
         output_types=tf.string, output_shapes=())
 
-    filename = 'tfrecords2/valid.tfrecord.gz'
+    filename = 'tfrecords/valid.tfrecord.gz'
     writer = tf.data.experimental.TFRecordWriter(filename, compression_type='GZIP')
     writer.write(serialized_valid_dataset)
     
     # Save train, valid, and test datasets
     data[data.icsdnum.isin(train)][
-        ['icsdnum', 'numatom', 'initialspacegroupnum', 'energyperatom']].to_csv(
-        'tfrecords2/train.csv.gz', compression='gzip', index=False)
+        ['sortedformula', 'icsdnum', 'numatom', 'initialspacegroupnum', 'energyperatom']].to_csv(
+        'tfrecords/train.csv.gz', compression='gzip', index=False)
     data[data.icsdnum.isin(valid)][
-        ['icsdnum', 'numatom', 'initialspacegroupnum', 'energyperatom']].to_csv(
-        'tfrecords2/valid.csv.gz', compression='gzip', index=False)
+        ['sortedformula', 'icsdnum', 'numatom', 'initialspacegroupnum', 'energyperatom']].to_csv(
+        'tfrecords/valid.csv.gz', compression='gzip', index=False)
     data[data.icsdnum.isin(test)][
-        ['icsdnum', 'numatom', 'initialspacegroupnum', 'energyperatom']].to_csv(
-        'tfrecords2/test.csv.gz', compression='gzip', index=False)
+        ['sortedformula', 'icsdnum', 'numatom', 'initialspacegroupnum', 'energyperatom']].to_csv(
+        'tfrecords/test.csv.gz', compression='gzip', index=False)
