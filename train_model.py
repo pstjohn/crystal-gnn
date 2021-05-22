@@ -8,13 +8,19 @@ import tensorflow as tf
 import tensorflow_addons as tfa
 from tensorflow.keras import layers
 
+# physical_devices = tf.config.list_physical_devices('GPU') 
+# tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
 import nfp
 from nfp_extensions import RBFExpansion
 
 # Initialize the preprocessor class.
 from nfp_extensions import CifPreprocessor
 preprocessor = CifPreprocessor(num_neighbors=12)
-preprocessor.from_json('tfrecords_nrel500_hypo58/preprocessor.json')
+
+tfrecords_dir = '/projects/rlmolecule/shubham/file_transfer/miscellaneous/tfrecords_NaN'
+
+preprocessor.from_json(os.path.join(tfrecords_dir, 'preprocessor.json'))
 
 # Build the tf.data input pipeline
 def parse_example(example):
@@ -40,21 +46,19 @@ max_bonds = 2048
 padded_shapes = (preprocessor.padded_shapes(max_sites=max_sites, max_bonds=max_bonds), [])
 padding_values = (preprocessor.padding_values, tf.constant(np.nan, dtype=tf.float32))
 
-train_dataset = tf.data.TFRecordDataset('tfrecords_nrel500_hypo58/train.tfrecord.gz', compression_type='GZIP')\
+train_dataset = tf.data.TFRecordDataset(os.path.join(tfrecords_dir, 'train.tfrecord.gz'), compression_type='GZIP')\
     .map(parse_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)\
     .cache()\
-    .shuffle(buffer_size=10000)\
-    .repeat()\
+    .shuffle(buffer_size=56802)\
     .padded_batch(batch_size=batch_size,
                   padded_shapes=padded_shapes,
                   padding_values=padding_values)\
     .prefetch(tf.data.experimental.AUTOTUNE)
 
-valid_dataset = tf.data.TFRecordDataset('tfrecords_nrel500_hypo58/valid.tfrecord.gz', compression_type='GZIP')\
+valid_dataset = tf.data.TFRecordDataset(os.path.join(tfrecords_dir, 'valid.tfrecord.gz'), compression_type='GZIP')\
     .map(parse_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)\
     .cache()\
     .shuffle(buffer_size=1000)\
-    .repeat()\
     .padded_batch(batch_size=batch_size,
                   padded_shapes=padded_shapes,
                   padding_values=padding_values)\
@@ -126,8 +130,9 @@ out = tf.keras.layers.GlobalAveragePooling1D()(atom_state)
 
 model = tf.keras.Model(input_tensors, [out])
 
-STEPS_PER_EPOCH = math.ceil(56000 / batch_size)  # number of training examples
-lr = 1E-4
+# STEPS_PER_EPOCH = math.ceil(56802 / batch_size)  # number of training examples
+STEPS_PER_EPOCH = math.ceil(16445 / batch_size)  # number of training examples
+lr = 1E-3
 lr_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(lr,
   decay_steps=STEPS_PER_EPOCH*50,
   decay_rate=1,
@@ -142,7 +147,7 @@ optimizer = tfa.optimizers.AdamW(learning_rate=lr_schedule, weight_decay=wd_sche
 
 model.compile(loss='mae', optimizer=optimizer)
 
-model_name = 'trained_model_nrel500_hypo58'
+model_name = 'trained_model_nrel500_hypo58_orig_sched_layers'
 
 if not os.path.exists(model_name):
     os.makedirs(model_name)
@@ -154,10 +159,10 @@ filepath = model_name + "/best_model.hdf5"
 checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath, save_best_only=True, verbose=0)
 csv_logger = tf.keras.callbacks.CSVLogger(model_name + '/log.csv')
 
-model.fit(train_dataset,
-          validation_data=valid_dataset,
-          epochs=500,
-          steps_per_epoch=STEPS_PER_EPOCH,
-          validation_steps=math.ceil(500/batch_size),
-          callbacks=[checkpoint, csv_logger],
-          verbose=1)
+
+if __name__ == "__main__":
+    model.fit(train_dataset,
+              validation_data=valid_dataset,
+              epochs=100,
+              callbacks=[checkpoint, csv_logger],
+              verbose=1)
